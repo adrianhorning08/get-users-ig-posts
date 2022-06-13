@@ -6,8 +6,10 @@ import { processImage } from "./utils";
 exports.handler = async (event: any, context: any) => {
 	try {
 		const userId = event.queryStringParameters?.userId;
+		const providerToken = event.queryStringParameters?.providerToken;
+		const instaId = event.queryStringParameters?.instaId;
 
-		await getUserPosts(userId);
+		await getUserPosts(userId, providerToken, instaId);
 
 		return {
 			statusCode: 200,
@@ -22,13 +24,13 @@ exports.handler = async (event: any, context: any) => {
 const GET_ALL_POSTS_URL = (instaId: string, providerToken: string) =>
 	`${CONSTANTS.GRAPH_API_URL}/${instaId}/media?fields=caption,media_url,permalink,id,timestamp,children{media_url}&access_token=${providerToken}`;
 
-async function getUserPosts(userId: string) {
+async function getUserPosts(userId: string, providerToken: string, instaId: string) {
 	try {
-		const user = await getUserById(userId);
 		const postsRes = await getPostsFromInsta(
-			user?.insta_id,
-			user?.provider_token
+			instaId,
+			providerToken
 		);
+
 		const postsInReverse = [] as any[];
 		const promises = [];
 		console.log("fetching all posts for user");
@@ -39,8 +41,11 @@ async function getUserPosts(userId: string) {
 		}
 		for (let idx = 0; idx < postsInReverse.length; idx++) {
 			const post = postsInReverse[idx];
-			// }
-			const dbPost = await createPost(post, user.id);
+			const postExists = await doesPostExist(post.id)
+			if (postExists) {
+				continue;
+			}
+			const dbPost = await createPost(post, userId);
 			// save the images
 			if (post?.children) {
 				for (let idx = 0; idx < post?.children?.data.length; idx++) {
@@ -67,19 +72,17 @@ async function getUserPosts(userId: string) {
 	}
 }
 
-async function getUserById(userId: string) {
+async function doesPostExist(postId: string): Promise<boolean> {
 	try {
-		const res = await axios({
-			url: `${CONSTANTS.API}/getUser`,
-			method: "POST",
-			data: {
-				userId,
-			},
-		});
-		return res?.data?.user;
+		const { data, error } = await supabase.from('posts').select('id').eq('id', postId)
+		if (error) {
+			console.log("error checking if post exists", error.message);
+			return false;
+		}
+		return data.length > 0;
 	} catch (error) {
-		console.log("error fetching user: " + error.message);
-		throw new Error(error.message);
+		console.log("error checking if post exists", error.message);
+		return false;
 	}
 }
 
