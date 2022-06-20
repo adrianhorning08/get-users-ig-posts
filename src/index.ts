@@ -32,7 +32,6 @@ async function getUserPosts(userId: string, providerToken: string, instaId: stri
 		);
 
 		const postsInReverse = [] as any[];
-		const promises = [];
 		console.log("fetching all posts for user");
 		const posts = postsRes?.data || [];
 		for (let i = 0; i < posts.length; i++) {
@@ -49,23 +48,19 @@ async function getUserPosts(userId: string, providerToken: string, instaId: stri
 			// save the images
 			if (post?.children) {
 				for (let idx = 0; idx < post?.children?.data.length; idx++) {
+					// TODO: I think sometimes these can be videos
 					const child = post?.children?.data?.[idx];
-					promises.push(
-						processImage(
-							child?.media_url,
-							dbPost?.id,
-							child?.id,
-							true
-						)
+					await processImage(
+						child?.media_url,
+						dbPost?.id,
+						child?.id,
+						true
 					);
 				}
 			} else {
-				promises.push(
-					processImage(post?.media_url, dbPost?.id, post?.id, false)
-				);
+				await processImage(post?.media_url, dbPost?.id, post?.id, false)
 			}
 		}
-		await Promise.all(promises);
 		console.log("finished fetching all posts");
 	} catch (error) {
 		console.log("error fetching posts: " + error.message);
